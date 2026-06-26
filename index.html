@@ -1123,12 +1123,29 @@
 
       function isCallSession(session) {
         const mediaType = String(session?.mediaType || session?.type || '').toLowerCase()
-        return mediaType === 'voice' || mediaType === 'call' || mediaType === 'callback'
+        return (
+          mediaType === 'voice' ||
+          mediaType === 'call' ||
+          mediaType === 'callback' ||
+          Boolean(session?.ani || session?.dnis || session?.peerId || session?.remote)
+        )
       }
 
       function getCallSession(participant) {
         const sessions = Array.isArray(participant?.sessions) ? participant.sessions : []
-        return sessions.find(isCallSession) || null
+        const calls = Array.isArray(participant?.calls)
+          ? participant.calls.map((call) => ({ ...call, mediaType: call.mediaType || 'voice' }))
+          : []
+
+        return [...sessions, ...calls].find(isCallSession) || null
+      }
+
+      function getParticipantUserId(participant) {
+        return participant?.userId || participant?.user?.id || participant?.user?.userId || null
+      }
+
+      function isSelectedUserParticipant(participant) {
+        return Boolean(participant?.id && getParticipantUserId(participant) === state.selectedUser?.id)
       }
 
       function getSessionState(session) {
@@ -1141,7 +1158,7 @@
 
       function isMonitorableState(value) {
         const normalized = String(value || '').toLowerCase()
-        return !normalized || ['connected', 'interacting', 'held'].includes(normalized)
+        return !normalized || ['connected', 'interacting', 'held', 'participant leg detected', 'unknown'].includes(normalized)
       }
 
       function findTargetParticipant(conversation) {
@@ -1149,10 +1166,13 @@
         const targetUserId = state.selectedUser?.id
         if (!targetUserId) return null
 
-        const userParticipants = participants.filter((participant) => participant?.userId === targetUserId && getCallSession(participant))
+        const userParticipants = participants.filter(isSelectedUserParticipant)
+        const userParticipantsWithCallDetails = userParticipants.filter((participant) => getCallSession(participant))
         return (
+          userParticipantsWithCallDetails.find((participant) => String(participant?.purpose || '').toLowerCase() === 'agent') ||
           userParticipants.find((participant) => String(participant?.purpose || '').toLowerCase() === 'agent') ||
-          userParticipants.find((participant) => !isDisconnectedState(getSessionState(getCallSession(participant)))) ||
+          userParticipantsWithCallDetails.find((participant) => !isDisconnectedState(getSessionState(getCallSession(participant)))) ||
+          userParticipants.find((participant) => !isDisconnectedState(participant?.state)) ||
           userParticipants[0] ||
           null
         )
@@ -1168,7 +1188,7 @@
 
         const session = getCallSession(participant)
         const sessionState = getSessionState(session)
-        const participantState = participant?.state || sessionState || 'unknown'
+        const participantState = participant?.state || sessionState || 'participant leg detected'
         const key = conversationId
         const existing = state.activeCalls.get(key) || {}
         const call = {
@@ -1176,13 +1196,15 @@
           conversationId,
           participantId: participant.id,
           participantPurpose: participant.purpose || 'unknown',
-          userId: participant.userId || state.selectedUser?.id,
+          userId: getParticipantUserId(participant) || state.selectedUser?.id,
           direction: getCallDirection(participant, session),
           ani: session?.ani || session?.remote || existing.ani || '',
           dnis: session?.dnis || existing.dnis || '',
+          mediaType: session?.mediaType || (String(conversation?.address || '').startsWith('sip:') ? 'voice' : 'unknown'),
           state: participantState,
           sessionState,
           disconnectType: session?.disconnectType || participant?.disconnectType || '',
+          inferredFromParticipantOnly: !session,
           startedAt: existing.startedAt || conversation?.startTime || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           monitorKey: `${conversationId}:${participant.id}`
@@ -1305,7 +1327,8 @@
           conversationId: call.conversationId,
           participantId: call.participantId,
           state: call.sessionState || call.state,
-          direction: call.direction
+          direction: call.direction,
+          inferred: call.inferredFromParticipantOnly ? 'yes' : 'no'
         })
 
         if (state.autoMonitor && !call.isEnded && isMonitorableState(call.sessionState || call.state)) {
@@ -1463,6 +1486,8 @@
                   </div>
                   <div class="pill-row">
                     <span class="pill ${attemptClass}">Monitor: ${escapeHtml(attempt?.status || 'not requested')}</span>
+                    ${call.inferredFromParticipantOnly ? '<span class="pill warn">Participant-only event</span>' : ''}
+                    <span class="pill">${escapeHtml(call.mediaType || 'unknown')}</span>
                     <span class="pill">Updated ${escapeHtml(new Date(call.updatedAt).toLocaleTimeString())}</span>
                   </div>
                 </div>

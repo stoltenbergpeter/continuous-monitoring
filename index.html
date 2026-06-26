@@ -8,16 +8,6 @@
     <title>Genesys Supervisor Auto Monitor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <link
-      no-cors
-      href="https://cdn.jsdelivr.net/npm/genesys-spark-components@latest/dist/genesys-webcomponents/genesys-webcomponents.min.css"
-      rel="stylesheet"
-    />
-    <script
-      no-cors
-      type="module"
-      src="https://cdn.jsdelivr.net/npm/genesys-spark-components@latest/dist/genesys-webcomponents/genesys-webcomponents.esm.min.js"
-    ></script>
     <script id="genesysSdkScript" src="https://sdk-cdn.mypurecloud.com/javascript/latest/purecloud-platform-client-v2.min.js" defer></script>
 
     <style>
@@ -338,6 +328,21 @@
         text-align: center;
       }
 
+      .boot-error {
+        background: var(--danger-soft);
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        color: var(--danger);
+        display: none;
+        font-weight: 700;
+        line-height: 1.35;
+        padding: 10px 12px;
+      }
+
+      .boot-error.visible {
+        display: block;
+      }
+
       .selected-agent {
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
@@ -412,8 +417,41 @@
         overflow-wrap: anywhere;
       }
 
-      gux-button {
-        zoom: 0.9;
+      .button {
+        align-items: center;
+        appearance: none;
+        border: 1px solid #cfd7e3;
+        border-radius: 6px;
+        cursor: pointer;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 700;
+        justify-content: center;
+        line-height: 1.2;
+        min-height: 34px;
+        padding: 8px 11px;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+        white-space: nowrap;
+      }
+
+      .button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+      }
+
+      .button.secondary {
+        background: #ffffff;
+        color: #344054;
+      }
+
+      .button:hover {
+        border-color: #98a2b3;
+      }
+
+      .button.primary:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
       }
 
       @media (max-width: 1180px) {
@@ -451,15 +489,16 @@
 
   <body>
     <div class="page">
+      <div id="bootError" class="boot-error"></div>
       <header class="topbar">
         <div class="title">
           <h1>Genesys Supervisor Auto Monitor</h1>
           <div class="subtitle">Select an agent, subscribe to their call conversations, and start monitor requests from the agent participant leg.</div>
         </div>
         <div class="top-actions">
-          <gux-button id="loginButton" accent="primary">Log In</gux-button>
-          <gux-button id="reconnectButton" accent="secondary">Reconnect</gux-button>
-          <gux-button id="stopButton" accent="secondary">Stop</gux-button>
+          <button id="loginButton" class="button primary" type="button">Log In</button>
+          <button id="reconnectButton" class="button secondary" type="button">Reconnect</button>
+          <button id="stopButton" class="button secondary" type="button">Stop</button>
         </div>
       </header>
 
@@ -515,8 +554,8 @@
                 <input id="userSearchInput" class="input" placeholder="Name, email, division, title" autocomplete="off" />
               </div>
               <div class="controls">
-                <gux-button id="loadUsersButton" accent="primary">Load Users</gux-button>
-                <gux-button id="loadAllUsersButton" accent="secondary">Load All</gux-button>
+                <button id="loadUsersButton" class="button primary" type="button">Load Users</button>
+                <button id="loadAllUsersButton" class="button secondary" type="button">Load All</button>
               </div>
             </div>
             <div id="usersContainer" class="list" style="margin-top: 10px">
@@ -527,7 +566,7 @@
           <section class="card">
             <div class="section-head">
               <h2>Event Log</h2>
-              <gux-button id="clearLogButton" accent="secondary">Clear</gux-button>
+              <button id="clearLogButton" class="button secondary" type="button">Clear</button>
             </div>
             <pre id="logArea" class="log">Waiting to start...</pre>
           </section>
@@ -550,8 +589,8 @@
               <span id="autoPill" class="pill ok">Auto monitor on</span>
             </div>
             <div class="controls" style="margin-top: 12px">
-              <gux-button id="startMonitoringButton" accent="primary">Start Monitoring</gux-button>
-              <gux-button id="stopMonitoringButton" accent="secondary">Stop Monitoring</gux-button>
+              <button id="startMonitoringButton" class="button primary" type="button">Start Monitoring</button>
+              <button id="stopMonitoringButton" class="button secondary" type="button">Stop Monitoring</button>
               <label class="switch-row">
                 <input id="autoMonitorToggle" type="checkbox" checked />
                 <span>Auto monitor</span>
@@ -584,6 +623,22 @@
 
     <script>
       'use strict'
+
+      function showBootError(message) {
+        const container = document.getElementById('bootError')
+        if (!container) return
+        container.textContent = message
+        container.classList.add('visible')
+      }
+
+      window.addEventListener('error', (event) => {
+        showBootError(`Page error: ${event.message || 'Unknown error'}`)
+      })
+
+      window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason
+        showBootError(`Page error: ${reason?.message || reason || 'Unhandled promise rejection'}`)
+      })
 
       const defaultGenesysRegion = 'usw2.pure.cloud'
       const defaultGenesysClientId = '409225b8-66a3-407c-92ad-fa386bad3e79'
@@ -1350,7 +1405,7 @@
                   </div>
                 </div>
                 <div>
-                  <gux-button accent="${isSelected ? 'secondary' : 'primary'}" data-user-id="${escapeHtml(user.id)}">${isSelected ? 'Selected' : 'Select'}</gux-button>
+                  <button class="button ${isSelected ? 'secondary' : 'primary'}" type="button" data-user-id="${escapeHtml(user.id)}">${isSelected ? 'Selected' : 'Select'}</button>
                 </div>
               </div>
             `
@@ -1412,7 +1467,7 @@
                   </div>
                 </div>
                 <div class="inline-controls">
-                  <gux-button accent="primary" data-monitor-key="${escapeHtml(call.monitorKey)}">Monitor</gux-button>
+                  <button class="button primary" type="button" data-monitor-key="${escapeHtml(call.monitorKey)}">Monitor</button>
                 </div>
               </div>
             `
